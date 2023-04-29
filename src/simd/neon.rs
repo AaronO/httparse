@@ -3,48 +3,22 @@ use core::arch::aarch64::*;
 
 #[inline]
 pub fn match_header_name_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 16 {
-        unsafe {
-            let advance = match_header_name_char_16_neon(bytes.as_ref().as_ptr());
-            bytes.advance(advance);
-
-            if advance != 16 {
-                return;
-            }
-        }
-    }
+    // simd_batch_match!(16, bytes, match_header_name_char_16_neon);
     super::swar::match_header_name_vectored(bytes);
 }
 
 #[inline]
 pub fn match_header_value_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 16 {
-        unsafe {
-            let advance = match_header_value_char_16_neon(bytes.as_ref().as_ptr());
-            bytes.advance(advance);
-
-            if advance != 16 {
-                return;
-            }
-        }
-    }
+    simd_batch_match!(16, bytes, match_header_value_char_16_neon);
     super::swar::match_header_value_vectored(bytes);
 }
 
 #[inline]
 pub fn match_uri_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 16 {
-        unsafe {
-            let advance = match_url_char_16_neon(bytes.as_ref().as_ptr());
-            bytes.advance(advance);
-
-            if advance != 16 {
-                return;
-            }
-        }
-    }
+    simd_batch_match!(16, bytes, match_url_char_16_neon);
     super::swar::match_uri_vectored(bytes);
 }
+
 
 const fn bit_set(x: u8) -> bool {
     // Validates if a byte is a valid header name character

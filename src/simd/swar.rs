@@ -6,15 +6,7 @@ use crate::{is_header_name_token, is_header_value_token, is_uri_token, Bytes};
 #[inline]
 pub fn match_uri_vectored(bytes: &mut Bytes) {
     loop {
-        if let Some(bytes8) = bytes.peek_n::<[u8; 8]>(8) {
-            let n = match_uri_char_8_swar(bytes8);
-            unsafe {
-                bytes.advance(n);
-            }
-            if n == 8 {
-                continue;
-            }
-        }
+        simd_batch_match_fallback!(8, bytes, match_uri_char_8_swar);
         if let Some(b) = bytes.peek() {
             if is_uri_token(b) {
                 unsafe { bytes.advance(1); }
@@ -28,15 +20,7 @@ pub fn match_uri_vectored(bytes: &mut Bytes) {
 #[inline]
 pub fn match_header_value_vectored(bytes: &mut Bytes) {
     loop {
-        if let Some(bytes8) = bytes.peek_n::<[u8; 8]>(8) {
-            let n = match_header_value_char_8_swar(bytes8);
-            unsafe {
-                bytes.advance(n);
-            }
-            if n == 8 {
-                continue;
-            }
-        }
+        simd_batch_match_fallback!(8, bytes, match_header_value_char_8_swar);
         if let Some(b) = bytes.peek() {
             if is_header_value_token(b) {
                 unsafe { bytes.advance(1); }
@@ -49,15 +33,12 @@ pub fn match_header_value_vectored(bytes: &mut Bytes) {
 
 #[inline]
 pub fn match_header_name_vectored(bytes: &mut Bytes) {
-    while let Some(block) = bytes.peek_n::<[u8; 8]>(8) {
-        let n = match_block(is_header_name_token, block);
-        unsafe {
-            bytes.advance(n);
-        }
-        if n != 8 {
-            return;
-        }
+    #[inline]
+    unsafe fn match_header_name_8_swar(ptr: *const u8) -> usize {
+        let block: [u8; 8] = *(ptr as *const [u8; 8]);
+        match_block(is_header_name_token, block)
     }
+    simd_batch_match!(8, bytes, match_header_name_8_swar);
     unsafe { bytes.advance(match_tail(is_header_name_token, bytes.as_ref())) };
 }
 
@@ -72,7 +53,6 @@ fn match_tail(f: impl Fn(u8) -> bool, bytes: &[u8]) -> usize {
     }
     bytes.len()
 }
-
 // Naive fallback block matcher
 #[inline(always)]
 fn match_block(f: impl Fn(u8) -> bool, block: [u8; 8]) -> usize {
@@ -95,7 +75,8 @@ const fn uniform_block(b: u8) -> u64 {
 // `33 <= x <= 126 && x != '>' && x != '<'`
 // IMPORTANT: it false negatives if the block contains '?'
 #[inline]
-fn match_uri_char_8_swar(block: [u8; 8]) -> usize {
+unsafe fn match_uri_char_8_swar(ptr: *const u8) -> usize {
+    let block: [u8; 8] = *(ptr as *const [u8; 8]);
     // 33 <= x <= 126
     const M: u8 = 0x21;
     const N: u8 = 0x7E;
@@ -143,7 +124,8 @@ fn match_uri_char_8_swar(block: [u8; 8]) -> usize {
 // ensuring all bytes in the word satisfy `32 <= x <= 126`
 // IMPORTANT: false negatives if obs-text is present (0x80..=0xFF)
 #[inline]
-fn match_header_value_char_8_swar(block: [u8; 8]) -> usize {
+unsafe fn match_header_value_char_8_swar(ptr: *const u8) -> usize {
+    let block: [u8; 8] = *(ptr as *const [u8; 8]);
     // 32 <= x <= 126
     const M: u8 = 0x20;
     const N: u8 = 0x7E;
@@ -177,7 +159,7 @@ fn offsetnz(block: u64) -> usize {
 
 #[test]
 fn test_is_header_value_block() {
-    let is_header_value_block = |b| match_header_value_char_8_swar(b) == 8;
+let is_header_value_block = |b: [u8; 8]| unsafe { match_header_value_char_8_swar(b.as_ptr()) == 8 };
 
     // 0..32 => false
     for b in 0..32_u8 {
@@ -199,7 +181,7 @@ fn test_is_header_value_block() {
 
 #[test]
 fn test_is_uri_block() {
-    let is_uri_block = |b| match_uri_char_8_swar(b) == 8;
+    let is_uri_block = |b: [u8; 8]| unsafe { match_uri_char_8_swar(b.as_ptr()) == 8 };
 
     // 0..33 => false
     for b in 0..33_u8 {

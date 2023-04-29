@@ -2,14 +2,7 @@ use crate::iter::Bytes;
 
 #[target_feature(enable = "sse4.2")]
 pub unsafe fn match_uri_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 16 {
-        let advance = match_url_char_16_sse(bytes.as_ref());
-        bytes.advance(advance);
-
-        if advance != 16 {
-            return;
-        }
-    }
+    simd_batch_match!(16, bytes, match_url_char_16_sse);
     super::swar::match_uri_vectored(bytes);
 }
 
@@ -63,14 +56,7 @@ unsafe fn match_url_char_16_sse(buf: &[u8]) -> usize {
 
 #[target_feature(enable = "sse4.2")]
 pub unsafe fn match_header_value_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 16 {
-        let advance = match_header_value_char_16_sse(bytes.as_ref());
-        bytes.advance(advance);
-
-       if advance != 16 {
-            return;
-       }
-    }
+    simd_batch_match!(16, bytes, match_header_value_char_16_sse);
     super::swar::match_header_value_vectored(bytes);
 }
 

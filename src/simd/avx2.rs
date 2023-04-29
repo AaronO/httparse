@@ -9,15 +9,7 @@ pub unsafe fn match_uri_vectored(_: &mut Bytes) {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2", enable = "sse4.2")]
 pub unsafe fn match_uri_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 32 {
-        let advance = match_url_char_32_avx(bytes.as_ref());
-        bytes.advance(advance);
-
-        if advance != 32 {
-            return;
-        }
-    }
-    // do both, since avx2 only works when bytes.len() >= 32
+    simd_batch_match!(32, bytes, match_url_char_32_avx);
     super::sse42::match_uri_vectored(bytes)
 }
 
@@ -71,14 +63,7 @@ pub unsafe fn match_header_value_vectored(_: &mut Bytes) {
 #[cfg(target_arch = "x86_64")]
 #[target_feature(enable = "avx2", enable = "sse4.2")]
 pub unsafe fn match_header_value_vectored(bytes: &mut Bytes) {
-    while bytes.as_ref().len() >= 32 {
-        let advance = match_header_value_char_32_avx(bytes.as_ref());
-        bytes.advance(advance);
-
-        if advance != 32 {
-            return;
-        }
-    }
+    simd_batch_match!(32, bytes, match_header_value_char_32_avx);
     // do both, since avx2 only works when bytes.len() >= 32
     super::sse42::match_header_value_vectored(bytes)
 }
