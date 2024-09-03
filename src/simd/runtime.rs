@@ -3,12 +3,10 @@ use super::sse42;
 use crate::iter::Bytes;
 use std::sync::atomic::{AtomicU8, Ordering};
 
-pub use self::avx2::match_header_name_vectored as avx2_match_header_name_vectored;
-pub use self::avx2::match_header_value_vectored as avx2_match_header_value_vectored;
-pub use self::sse42::match_header_name_vectored as sse42_match_header_name_vectored;
-pub use self::sse42::match_header_value_vectored as sse42_match_header_value_vectored;
-pub use self::swar::match_header_name_vectored as swar_match_header_name_vectored;
-pub use self::swar::match_header_value_vectored as swar_match_header_value_vectored;
+pub use super::avx2::match_header_value_vectored as avx2_match_header_value_vectored;
+pub use super::sse42::match_header_value_vectored as sse42_match_header_value_vectored;
+pub use super::swar::match_header_name_vectored as swar_match_header_name_vectored;
+pub use super::swar::match_header_value_vectored as swar_match_header_value_vectored;
 
 const AVX2: u8 = 1;
 const SSE42: u8 = 2;
@@ -41,8 +39,8 @@ pub fn match_header_name_vectored(bytes: &mut Bytes) {
     super::swar::match_header_name_vectored(bytes);
 }
 
-static mut MATCH_URI_VECTORED: fn(&mut Bytes) = setup_and_call_match_uri_vectored;
-static mut MATCH_HEADER_VALUE_VECTORED: fn(&mut Bytes) = setup_and_call_match_header_value_vectored;
+static mut MATCH_URI_VECTORED: unsafe fn(&mut Bytes) = setup_and_call_match_uri_vectored;
+static mut MATCH_HEADER_VALUE_VECTORED: unsafe fn(&mut Bytes) = setup_and_call_match_header_value_vectored;
 
 fn setup_and_call_match_uri_vectored(bytes: &mut Bytes) {
     unsafe {

@@ -1055,23 +1055,25 @@ struct HeaderParserConfig {
         target_arch = "x86_64",
     ),
 ))]
-fn parse_headers_iter_uninit<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
-    static mut PARSE_FUNC: fn(&mut &mut [MaybeUninit<Header<'a>>], &mut Bytes<'a>, &HeaderParserConfig) -> Result<usize> = parse_headers_setup;
+fn parse_headers_iter_uninit<'b>(headers: &mut &mut [MaybeUninit<Header<'b>>], bytes: &mut Bytes<'b>, config: &HeaderParserConfig) -> Result<usize> {
+    static mut PARSE_FUNC: for<'a> fn(&mut &mut [MaybeUninit<Header<'a>>], &mut Bytes<'a>, &HeaderParserConfig) -> Result<usize> = parse_headers_setup;
 
     fn parse_headers_avx2<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
         struct Avx2HeaderMatcher;
         impl HeaderMatcher for Avx2HeaderMatcher {
             #[inline(always)]
             fn match_name(bytes: &mut Bytes) {
-                simd::avx2_match_header_name_vectored(bytes)
+                simd::swar_match_header_name_vectored(bytes)
             }
             #[inline(always)]
             fn match_value(bytes: &mut Bytes) {
-                simd::avx2_match_header_value_vectored(bytes)
+                unsafe {
+                    simd::avx2_match_header_value_vectored(bytes)
+                }
             }
         }
 
-        _parse_headers_iter_uninit::<'a, Avx2HeaderMatcher>(headers, bytes, config)
+        _parse_headers_iter_uninit::<Avx2HeaderMatcher>(headers, bytes, config)
     }
 
     fn parse_headers_sse42<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
@@ -1079,15 +1081,17 @@ fn parse_headers_iter_uninit<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], b
         impl HeaderMatcher for Sse42HeaderMatcher {
             #[inline(always)]
             fn match_name(bytes: &mut Bytes) {
-                simd::sse42_match_header_name_vectored(bytes)
+                simd::swar_match_header_name_vectored(bytes)
             }
             #[inline(always)]
             fn match_value(bytes: &mut Bytes) {
-                simd::sse42_match_header_value_vectored(bytes)
+                unsafe {
+                    simd::sse42_match_header_value_vectored(bytes)
+                }
             }
         }
 
-        _parse_headers_iter_uninit::<'a, Sse42HeaderMatcher>(headers, bytes, config)
+        _parse_headers_iter_uninit::<Sse42HeaderMatcher>(headers, bytes, config)
     }
 
     fn parse_headers_swar<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
@@ -1103,10 +1107,10 @@ fn parse_headers_iter_uninit<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], b
             }
         }
 
-        _parse_headers_iter_uninit::<'a, SwarHeaderMatcher>(headers, bytes, config)
+        _parse_headers_iter_uninit::<SwarHeaderMatcher>(headers, bytes, config)
     }
 
-    fn parse_headers_setup(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
+    fn parse_headers_setup<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], bytes: &mut Bytes<'a>, config: &HeaderParserConfig) -> Result<usize> {
         if is_x86_feature_detected!("avx2") {
             unsafe {
                 PARSE_FUNC = parse_headers_avx2;
@@ -1124,6 +1128,10 @@ fn parse_headers_iter_uninit<'a>(headers: &mut &mut [MaybeUninit<Header<'a>>], b
         unsafe {
             PARSE_FUNC(headers, bytes, config)
         }
+    }
+
+    unsafe {
+        PARSE_FUNC(headers, bytes, config)
     }
 }
 
